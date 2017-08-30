@@ -59,28 +59,22 @@ void runcmd(struct cmd *cmd) {
         ecmd = (struct execcmd*)cmd;
         if(ecmd->argv[0] == 0)
             exit(0);
-        // Your code herev ...
-        if (execvp(ecmd->argv[0], ecmd->argv) < 0) {
-            fprintf(stderr, "commond not find\n");
+        // Your code here ...
+        char* path = (char*) malloc(100 * sizeof(char));
+        strcpy(path, "/bin/");
+        strcat(path, ecmd->argv[0]);
+        if (access(path, F_OK) == 0) { // 不存在返回-1 存在返回0  ls cat
+            execv(path, ecmd->argv);
+        } else {
+            memset(path, 0, strlen(path));
+            strcpy(path, "/usr/bin/");
+            strcat(path, ecmd->argv[0]);
+            if (access(path, F_OK) == 0) { //  wc
+                execv(path, ecmd->argv);
+            } else {
+                fprintf(stderr, "commond not find\n");
+            }
         }
-
-//        char* path = (char*) malloc(100 * sizeof(char));
-//        strcpy(path, "/bin/");v
-
-//        strcat(path, ecmd->argv[0]);
-//
-//        if (access(path, F_OK) == 0) { // 不存在返回-1 存在返回0  ls cat
-//            execv(path, ecmd->argv);
-//        } else {
-//            memset(path, 0, strlen(path));
-//            strcpy(path, "/usr/bin/");
-//            strcat(path, ecmd->argv[0]);
-//            if (access(path, F_OK) == 0) { //  wc
-//                execvp(path, ecmd->argv);
-//            } else {
-//                fprintf(stderr, "commond not find\n");
-//            }
-//        }
 
         break;
 
@@ -91,7 +85,7 @@ void runcmd(struct cmd *cmd) {
         // Your code here ...
         int fd = open(rcmd->file, rcmd->mode, 0777);
         if (fd < 0) {
-            fprintf(2, "open file error\n");
+            fprintf(stderr, "open file error\n");
             exit(-1); // 失败退出
         }
         // 进行重定向
@@ -115,7 +109,7 @@ void runcmd(struct cmd *cmd) {
         // 2、父进程fork，子进程也就拥有了两个文件描述符指向同一个管道
         // 3、父子进程分别关闭自己不需要的文件描述符
         if (pipe(p) < 0) {
-            fprintf(2, "pipe error\n");
+            fprintf(stderr, "pipe error\n");
             exit(-1);
         }
         int pidLeft = fork();
@@ -124,6 +118,7 @@ void runcmd(struct cmd *cmd) {
             int fd = dup2(p[1], 1);
             if (fd < 0) {
                 fprintf(stderr, "dup left error\n");
+                exit(-1);
             }
             runcmd(pcmd->left);
             close(p[1]);
@@ -132,30 +127,24 @@ void runcmd(struct cmd *cmd) {
             exit(-1);
         }
 
-//        int pidRight = fork();
-//        if (pidRight == 0) { // 右 读
+        int pidRight = fork();
+        if (pidRight == 0) { // 右 读
             close(p[1]);
             int fd = dup2(p[0], 0);
             if (fd < 0) {
                 fprintf(stderr, "dup right error\n");
+                exit(-1);
             }
             runcmd(pcmd->right);
             close(p[0]);
-//        } else if (pidRight < 0) {
-//            fprintf(stderr, "fork right error\n");
-//            exit(-1);
-//        }
-//        close(p[0]);
-//        close(p[1]);
-        wait(&pidLeft);
-//        wait(&pidRight);
-        close(p[1]);
-        int fd = dup2(p[0], 0);
-        if (fd < 0) {
-            fprintf(stderr, "dup right error\n");
+        } else if (pidRight < 0) {
+            fprintf(stderr, "fork right error\n");
+            exit(-1);
         }
-        runcmd(pcmd->right);
         close(p[0]);
+        close(p[1]);
+        wait(&pidLeft);
+        wait(&pidRight);
         break;
     }
     exit(0);
